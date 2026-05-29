@@ -19,7 +19,7 @@
 
 | Метод | Путь | Описание | Авторизация |
 |-------|------|----------|-------------|
-| POST | `/login` | Вход, получение JWT-токена | Нет |
+| POST | `/login` | Вход по email, получение JWT-токена | Нет |
 | POST | `/user/register` | Регистрация пользователя | Нет |
 | GET  | `/user/get/{id}` | Получение анкеты по ID | Bearer JWT |
 
@@ -44,13 +44,13 @@ cd backend/SocialNetwork
 dotnet run
 ```
 
-API будет доступен на: **http://localhost:5000**  
-Swagger UI: **http://localhost:5000/swagger**
+API будет доступен на: **https://localhost:7162**  
+Swagger UI: **https://localhost:7162/swagger**
 
 #### Настройки подключения (appsettings.json)
 Строка подключения уже настроена:
 ```json
-"MySql": "Server=127.0.0.1;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;"
+"MySql": "Server=127.0.0.1;Port=3306;Database=social_network;Uid=admin;Pwd=...;"
 ```
 
 ### 3. Frontend (Vue.js)
@@ -70,7 +70,7 @@ npm run dev
 1. Импортируйте `postman/SocialNetwork.postman_collection.json` в Postman
 2. Выполните запросы **по порядку**:
    - **1. Регистрация** → автоматически сохраняет `{{user_id}}`
-   - **2. Вход** → автоматически сохраняет `{{token}}`
+   - **2. Вход** → автоматически сохраняет `{{token}}` и `{{user_id}}`
    - **3. Получить анкету** → использует оба сохранённых значения
 
 ---
@@ -79,10 +79,11 @@ npm run dev
 
 ### Регистрация
 ```http
-POST http://localhost:5000/user/register
+POST https://localhost:7162/user/register
 Content-Type: application/json
 
 {
+  "email": "ivan@example.com",
   "first_name": "Иван",
   "second_name": "Иванов",
   "birthdate": "1990-05-15",
@@ -99,28 +100,32 @@ Content-Type: application/json
 
 ### Вход
 ```http
-POST http://localhost:5000/login
+POST https://localhost:7162/login
 Content-Type: application/json
 
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "ivan@example.com",
   "password": "secret123"
 }
 ```
 Ответ:
 ```json
-{ "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
 
 ### Получение анкеты
 ```http
-GET http://localhost:5000/user/get/550e8400-e29b-41d4-a716-446655440000
+GET https://localhost:7162/user/get/550e8400-e29b-41d4-a716-446655440000
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 Ответ:
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "ivan@example.com",
   "first_name": "Иван",
   "second_name": "Иванов",
   "birthdate": "1990-05-15",
