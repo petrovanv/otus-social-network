@@ -43,6 +43,29 @@ public class UserController : ControllerBase
         return Ok(new { user_id = userId });
     }
 
+    /// <summary>Поиск анкет по префиксу имени и фамилии</summary>
+    [HttpGet("search")]
+    [Authorize]
+    public async Task<IActionResult> Search([FromQuery] string first_name, [FromQuery] string last_name)
+    {
+        if (string.IsNullOrWhiteSpace(first_name) || string.IsNullOrWhiteSpace(last_name))
+            return BadRequest(new { message = "Параметры first_name и last_name обязательны" });
+
+        var users = await _userRepository.SearchAsync(first_name, last_name);
+
+        return Ok(users.Select(u => new UserResponse
+        {
+            Id = u.Id,
+            Email = u.Email,
+            FirstName = u.FirstName,
+            SecondName = u.SecondName,
+            Birthdate = u.Birthdate.ToString("yyyy-MM-dd"),
+            Gender = u.Gender,
+            Biography = u.Biography,
+            City = u.City
+        }));
+    }
+
     /// <summary>Получение анкеты пользователя по ID</summary>
     [HttpGet("get/{id}")]
     [Authorize]

@@ -69,6 +69,29 @@ public class UserRepository : IUserRepository
         return MapUser(reader);
     }
 
+    public async Task<List<User>> SearchAsync(string firstName, string lastName)
+    {
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        const string sql = @"
+            SELECT id, email, first_name, second_name, birthdate, gender, biography, city, password_hash
+            FROM users FORCE INDEX (idx_name_search)
+            WHERE first_name LIKE @firstName AND second_name LIKE @lastName
+            ORDER BY id";
+
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@firstName", firstName + "%");
+        cmd.Parameters.AddWithValue("@lastName", lastName + "%");
+
+        var results = new List<User>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            results.Add(MapUser(reader));
+
+        return results;
+    }
+
     private static User MapUser(MySqlDataReader reader) => new()
     {
         Id = reader.GetString("id"),

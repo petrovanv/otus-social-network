@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Отчёт ДЗ2 — Индексы MySQL | Otus Highload</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 2rem; background: #f8f9fa; color: #212529; }
+  h1 { color: #1a1a2e; border-bottom: 3px solid #0d6efd; padding-bottom: .5rem; }
+  h2 { color: #0d6efd; margin-top: 2.5rem; }
+  h3 { color: #495057; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .chart-box { background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  th { background: #0d6efd; color: white; padding: .75rem 1rem; text-align: left; }
+  td { padding: .65rem 1rem; border-bottom: 1px solid #dee2e6; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  .badge { display: inline-block; padding: .25rem .6rem; border-radius: 50px; font-size: .8rem; font-weight: 600; }
+  .badge-good { background: #d1e7dd; color: #0f5132; }
+  .badge-bad  { background: #f8d7da; color: #842029; }
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 1.2rem; border-radius: 8px; overflow-x: auto; font-size: .88rem; line-height: 1.5; }
+  .highlight { background: #fff3cd; border-left: 4px solid #ffc107; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin: 1.5rem 0; }
+  .metric-card { background: white; border-radius: 10px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .metric-card .value { font-size: 2rem; font-weight: 700; color: #0d6efd; }
+  .metric-card .label { font-size: .85rem; color: #6c757d; margin-top: .25rem; }
+  @media(max-width:768px) { .charts-grid,.summary-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<h1>ДЗ2 — Нагрузочное тестирование и индексы MySQL</h1>
+<p><strong>Курс:</strong> Otus Highload | <strong>Дата:</strong> 14 июня 2026 г.</p>
+
+<h2>1. Конфигурация</h2>
+<table>
+  <tr><th>Параметр</th><th>Значение</th></tr>
+  <tr><td>СУБД</td><td>MySQL 8.0</td></tr>
+  <tr><td>Записей в таблице</td><td>995 000 (реальные имена из CSV)</td></tr>
+  <tr><td>Инструмент нагрузки</td><td>k6 v0.57.0</td></tr>
+  <tr><td>Длительность каждого теста</td><td>30 секунд</td></tr>
+  <tr><td>Уровни нагрузки (VU)</td><td>1 / 10 / 100 / 1000</td></tr>
+  <tr><td>Поисковый запрос</td><td>first_name LIKE ? AND second_name LIKE ? ORDER BY id</td></tr>
+</table>
+
+<h2>2. Результаты <span class="badge badge-bad">БЕЗ индекса</span></h2>
+
+<div class="summary-grid">
+  <div class="metric-card"><div class="value">4 669</div><div class="label">avg latency, ms (1 VU)</div></div>
+  <div class="metric-card"><div class="value">0.21</div><div class="label">RPS (1 VU)</div></div>
+  <div class="metric-card"><div class="value">28 869</div><div class="label">avg latency, ms (100 VU)</div></div>
+  <div class="metric-card"><div class="value">2.18</div><div class="label">RPS (100 VU)</div></div>
+</div>
+
+<table>
+  <tr><th>VUs</th><th>avg (ms)</th><th>p90 (ms)</th><th>p95 (ms)</th><th>RPS</th></tr>
+  <tr><td>1</td><td>4 669</td><td>4 983</td><td>5 137</td><td>0.21</td></tr>
+  <tr><td>10</td><td>8 070</td><td>9 428</td><td>9 447</td><td>1.24</td></tr>
+  <tr><td>100</td><td>28 869</td><td>32 545</td><td>38 350</td><td>2.18</td></tr>
+  <tr><td>1000</td><td>~15 000*</td><td>15 366</td><td>16 919</td><td>—*</td></tr>
+</table>
+<p><small>* При 1000 VU сервер нестабилен: часть запросов завершается ошибкой connection refused.</small></p>
+
+<div class="charts-grid" style="margin-top:1.5rem">
+  <div class="chart-box">
+    <h3>Latency — без индекса</h3>
+    <canvas id="latNoIdx"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Throughput (RPS) — без индекса</h3>
+    <canvas id="rpsNoIdx"></canvas>
+  </div>
+</div>
+
+<h2>3. Добавление индекса</h2>
+<pre>-- Составной индекс по полям поиска
+CREATE INDEX idx_name_search ON users (first_name, second_name);</pre>
+
+<div class="highlight">
+  <strong>Почему именно такой индекс?</strong><br><br>
+  Запрос вида <code>first_name LIKE 'Ал%' AND second_name LIKE 'Ив%'</code> использует <strong>префиксный поиск</strong>.
+  MySQL B-Tree индекс поддерживает prefix-scan: он находит диапазон ключей начинающихся с нужного префикса без полного сканирования.
+  Порядок столбцов в индексе <code>(first_name, second_name)</code> выбран так, что сначала отрабатывает более высокоселективное условие по имени,
+  затем дополнительно фильтруется по фамилии в уже отобранном диапазоне.
+  Индекс <code>(second_name, first_name)</code> работал бы так же, но <code>(first_name, second_name)</code> интуитивно понятнее
+  и соответствует порядку параметров в API.
+</div>
+
+<h2>4. EXPLAIN после индекса</h2>
+<pre>EXPLAIN SELECT ... FROM users FORCE INDEX (idx_name_search)
+WHERE first_name LIKE 'Ал%' AND second_name LIKE 'Ив%'
+ORDER BY id\G
+
+           id: 1
+  select_type: SIMPLE
+        table: users
+         type: range                    ← range scan по индексу (не full scan!)
+possible_keys: idx_name_search
+          key: idx_name_search          ← индекс используется
+      key_len: 804
+         rows: 173124                   ← оценка строк до фильтрации
+     filtered: 11.11
+        Extra: Using index condition; Using filesort
+
+-- Без хинта MySQL предпочитает PRIMARY (ORDER BY id), поэтому используем FORCE INDEX.</pre>
+
+<h2>5. Результаты <span class="badge badge-good">С индексом</span></h2>
+
+<div class="summary-grid">
+  <div class="metric-card"><div class="value">96</div><div class="label">avg latency, ms (1 VU)</div></div>
+  <div class="metric-card"><div class="value">10.4</div><div class="label">RPS (1 VU)</div></div>
+  <div class="metric-card"><div class="value">1 754</div><div class="label">avg latency, ms (100 VU)</div></div>
+  <div class="metric-card"><div class="value">55.2</div><div class="label">RPS (100 VU)</div></div>
+</div>
+
+<table>
+  <tr><th>VUs</th><th>avg (ms)</th><th>p90 (ms)</th><th>p95 (ms)</th><th>RPS</th></tr>
+  <tr><td>1</td><td>96</td><td>243</td><td>281</td><td>10.42</td></tr>
+  <tr><td>10</td><td>201</td><td>482</td><td>617</td><td>49.20</td></tr>
+  <tr><td>100</td><td>1 754</td><td>5 177</td><td>8 065</td><td>55.16</td></tr>
+  <tr><td>1000</td><td>12 900</td><td>16 288</td><td>20 736</td><td>61.46</td></tr>
+</table>
+
+<div class="charts-grid" style="margin-top:1.5rem">
+  <div class="chart-box">
+    <h3>Latency — с индексом</h3>
+    <canvas id="latIdx"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Throughput (RPS) — с индексом</h3>
+    <canvas id="rpsIdx"></canvas>
+  </div>
+</div>
+
+<h2>6. Сравнение</h2>
+<div class="charts-grid">
+  <div class="chart-box">
+    <h3>Latency: до vs после (avg, p90, p95)</h3>
+    <canvas id="cmpLat"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Throughput: до vs после (RPS)</h3>
+    <canvas id="cmpRps"></canvas>
+  </div>
+</div>
+
+<table style="margin-top:1.5rem">
+  <tr><th>VUs</th><th>Latency без индекса (avg)</th><th>Latency с индексом (avg)</th><th>Улучшение</th></tr>
+  <tr><td>1</td><td>4 669 ms</td><td>96 ms</td><td class="badge badge-good">×48.6</td></tr>
+  <tr><td>10</td><td>8 070 ms</td><td>201 ms</td><td class="badge badge-good">×40.1</td></tr>
+  <tr><td>100</td><td>28 869 ms</td><td>1 754 ms</td><td class="badge badge-good">×16.5</td></tr>
+</table>
+
+<h2>7. Выводы</h2>
+<ul>
+  <li>Без индекса MySQL выполняет <strong>полный скан таблицы</strong> (~995K строк) на каждый запрос, что даёт ~4.7 с даже при 1 клиенте.</li>
+  <li>Составной индекс <code>(first_name, second_name)</code> переключает план на <strong>range scan</strong>, ускоряя поиск в ~49 раз при 1 VU.</li>
+  <li>При 100 параллельных запросах даже с индексом latency вырастает до ~1.8 с — из-за большого объёма ответа (300–500 KB на запрос).</li>
+  <li>Без лимита на количество результатов узким местом становится <strong>сетевая передача</strong> и сериализация JSON, а не БД.</li>
+  <li>MySQL не выбирает индекс автоматически при наличии <code>ORDER BY id</code> (предпочитает PK scan), поэтому использован <code>FORCE INDEX</code>.</li>
+</ul>
+
+<script>
+const vus = ['1', '10', '100'];
+const noAvg  = [4669, 8070, 28869];
+const noP90  = [4983, 9428, 32545];
+const noP95  = [5137, 9447, 38350];
+const noRps  = [0.21, 1.24, 2.18];
+const wiAvg  = [96,   201,  1754];
+const wiP90  = [243,  482,  5177];
+const wiP95  = [281,  617,  8065];
+const wiRps  = [10.42,49.20,55.16];
+
+function bar(id, labels, datasets, ytitle) {
+  new Chart(document.getElementById(id), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: { responsive: true, plugins: { legend: { position: 'top' } },
+      scales: { y: { title: { display: true, text: ytitle } } } }
+  });
+}
+function line(id, labels, datasets, ytitle) {
+  new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels, datasets: datasets.map(d => ({ ...d, tension: 0.3, pointRadius: 5 })) },
+    options: { responsive: true, plugins: { legend: { position: 'top' } },
+      scales: { y: { title: { display: true, text: ytitle } } } }
+  });
+}
+
+// No index latency
+bar('latNoIdx', vus, [
+  { label: 'avg', data: noAvg, backgroundColor: '#dc354588' },
+  { label: 'p90', data: noP90, backgroundColor: '#fd7e1488' },
+  { label: 'p95', data: noP95, backgroundColor: '#ffc10788' },
+], 'Latency, ms');
+
+// No index RPS
+bar('rpsNoIdx', vus, [
+  { label: 'RPS', data: noRps, backgroundColor: '#dc354588' },
+], 'Requests / second');
+
+// With index latency
+bar('latIdx', vus, [
+  { label: 'avg', data: wiAvg, backgroundColor: '#19875488' },
+  { label: 'p90', data: wiP90, backgroundColor: '#20c99788' },
+  { label: 'p95', data: wiP95, backgroundColor: '#0d6efd88' },
+], 'Latency, ms');
+
+// With index RPS
+bar('rpsIdx', vus, [
+  { label: 'RPS', data: wiRps, backgroundColor: '#19875488' },
+], 'Requests / second');
+
+// Comparison latency
+line('cmpLat', vus, [
+  { label: 'avg без индекса', data: noAvg, borderColor: '#dc3545', backgroundColor: '#dc354520' },
+  { label: 'p90 без индекса', data: noP90, borderColor: '#fd7e14', backgroundColor: '#fd7e1420' },
+  { label: 'avg с индексом',  data: wiAvg, borderColor: '#198754', backgroundColor: '#19875420' },
+  { label: 'p90 с индексом',  data: wiP90, borderColor: '#0d6efd', backgroundColor: '#0d6efd20' },
+], 'Latency, ms');
+
+// Comparison RPS
+line('cmpRps', vus, [
+  { label: 'RPS без индекса', data: noRps, borderColor: '#dc3545', backgroundColor: '#dc354520' },
+  { label: 'RPS с индексом',  data: wiRps, borderColor: '#198754', backgroundColor: '#19875420' },
+], 'Requests / second');
+</script>
+</body>
+</html>
