@@ -4,7 +4,7 @@
 $PWD_DB = "Tenerife12!"
 
 function Invoke-MySql($container, $query) {
-    cmd /c "docker exec $container mysql -uroot -p$PWD_DB -e `"$query`" 2>nul"
+    $query | docker exec -i $container mysql -uroot "-p$PWD_DB"
 }
 
 Write-Host "1. Master: плагин semi-sync source + включение..."
@@ -19,6 +19,7 @@ foreach ($slave in @("mysql-slave1", "mysql-slave2")) {
 
 Start-Sleep 3
 Write-Host "3. Статус semi-sync на мастере:"
-cmd /c "docker exec mysql-master mysql -uroot -p$PWD_DB -e `"SHOW STATUS WHERE Variable_name IN ('Rpl_semi_sync_source_status','Rpl_semi_sync_source_clients','Rpl_semi_sync_source_yes_tx')`" 2>nul"
+"SHOW STATUS WHERE Variable_name IN ('Rpl_semi_sync_source_status','Rpl_semi_sync_source_clients')" |
+    docker exec -i mysql-master mysql -uroot "-p$PWD_DB"
 
 Write-Host "Done. Мастер подтверждает COMMIT только после ACK от >=1 слейва."

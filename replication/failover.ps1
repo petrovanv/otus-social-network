@@ -4,10 +4,10 @@
 $PWD_DB = "Tenerife12!"
 
 function MySqlN($container, $query) {
-    (cmd /c "docker exec $container mysql -uroot -p$PWD_DB -N -e `"$query`" 2>nul") -join ""
+    ($query | docker exec -i $container mysql -uroot "-p$PWD_DB" -N) -join ""
 }
 function MySqlExec($container, $query) {
-    cmd /c "docker exec $container mysql -uroot -p$PWD_DB -e `"$query`" 2>nul" | Out-Null
+    $query | docker exec -i $container mysql -uroot "-p$PWD_DB" | Out-Null
 }
 
 Write-Host "1. Сравниваем GTID слейвов (кто применил больше транзакций)..."
@@ -42,7 +42,4 @@ Start-Sleep 2
 $rows = MySqlN $newMaster "SELECT COUNT(*) FROM social_network.failover_test"
 Write-Host "4. Строк в failover_test на новом мастере ($newMaster): $rows"
 Write-Host "   Сравните с successful_commits из write-load.py."
-
-# Экспорт результата для отчёта
-$rows | Out-File "C:\Otus\1\replication\loadtest\results\failover_newmaster_rows.txt" -Encoding ascii
 Write-Host "Done. Новый мастер: $newMaster"

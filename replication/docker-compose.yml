@@ -1,4 +1,23 @@
 services:
+  # ---------- Backend (.NET 8 Web API) ----------
+  app:
+    build:
+      context: ../backend/SocialNetwork
+    container_name: sn-app
+    restart: unless-stopped
+    ports:
+      - "5282:8080"
+    environment:
+      # Запись — на мастер, чтение — round-robin по слейвам
+      ConnectionStrings__MySql: "Server=mysql-master;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
+      Replication__UseReplicas: "true"
+      Replication__Slaves__0: "Server=mysql-slave1;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
+      Replication__Slaves__1: "Server=mysql-slave2;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+
+  # ---------- MySQL master ----------
   mysql-master:
     image: mysql:8.0
     container_name: mysql-master
@@ -12,7 +31,7 @@ services:
       - "3406:3306"
     volumes:
       - master-data:/var/lib/mysql
-    # Настройки передаются флагами: bind-mount cnf на Windows игнорируется MySQL (права 777)
+      - ./init:/docker-entrypoint-initdb.d:ro    # схема + индекс на первом старте
     command:
       - --server-id=1
       - --log-bin=mysql-bin
@@ -28,15 +47,13 @@ services:
       timeout: 3s
       retries: 20
 
+  # ---------- MySQL slave 1 (стартует пустым — данные приходят по репликации) ----------
   mysql-slave1:
     image: mysql:8.0
     container_name: mysql-slave1
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: Tenerife12!
-      MYSQL_DATABASE: social_network
-      MYSQL_USER: admin
-      MYSQL_PASSWORD: Tenerife12!
     ports:
       - "3407:3306"
     volumes:
@@ -60,15 +77,13 @@ services:
       timeout: 3s
       retries: 20
 
+  # ---------- MySQL slave 2 ----------
   mysql-slave2:
     image: mysql:8.0
     container_name: mysql-slave2
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: Tenerife12!
-      MYSQL_DATABASE: social_network
-      MYSQL_USER: admin
-      MYSQL_PASSWORD: Tenerife12!
     ports:
       - "3408:3306"
     volumes:
