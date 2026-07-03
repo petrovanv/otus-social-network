@@ -1,0 +1,70 @@
+{
+  "baseline": [
+    {
+      "vus": 1,
+      "throughput": 62.96,
+      "get_p95": 5.02,
+      "get_avg": 3.45,
+      "search_p95": 72.7,
+      "search_avg": 27.68
+    },
+    {
+      "vus": 10,
+      "throughput": 222.55,
+      "get_p95": 21.11,
+      "get_avg": 9.52,
+      "search_p95": 188.44,
+      "search_avg": 77.89
+    },
+    {
+      "vus": 50,
+      "throughput": 209.26,
+      "get_p95": 85.13,
+      "get_avg": 29.72,
+      "search_p95": 1236.21,
+      "search_avg": 445.56
+    },
+    {
+      "vus": 100,
+      "throughput": 218.2,
+      "get_p95": 185.82,
+      "get_avg": 51.93,
+      "search_p95": 2376.72,
+      "search_avg": 854.75
+    }
+  ],
+  "slaves": [
+    {
+      "vus": 1,
+      "throughput": 24.99,
+      "get_p95": 10.78,
+      "get_avg": 5.5,
+      "search_p95": 246.86,
+      "search_avg": 72.41
+    },
+    {
+      "vus": 10,
+      "throughput": 169.68,
+      "get_p95": 42.41,
+      "get_avg": 17.6,
+      "search_p95": 244.72,
+      "search_avg": 99.75
+    },
+    {
+      "vus": 50,
+      "throughput": 182.97,
+      "get_p95": 166.47,
+      "get_avg": 50.72,
+      "search_p95": 1343.03,
+      "search_avg": 491.2
+    },
+    {
+      "vus": 100,
+      "throughput": 127.14,
+      "get_p95": 763.44,
+      "get_avg": 206.45,
+      "search_p95": 3754.68,
+      "search_avg": 1356.5
+    }
+  ]
+}

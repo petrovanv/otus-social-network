@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Отчёт — Репликация MySQL | Otus Highload</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 2rem; background: #f8f9fa; color: #212529; }
+  h1 { color: #1a1a2e; border-bottom: 3px solid #0d6efd; padding-bottom: .5rem; }
+  h2 { color: #0d6efd; margin-top: 2.5rem; }
+  h3 { color: #495057; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .chart-box { background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); margin-bottom: 1rem; }
+  th { background: #0d6efd; color: white; padding: .75rem 1rem; text-align: left; }
+  td { padding: .65rem 1rem; border-bottom: 1px solid #dee2e6; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  .badge { display: inline-block; padding: .25rem .6rem; border-radius: 50px; font-size: .8rem; font-weight: 600; }
+  .badge-good { background: #d1e7dd; color: #0f5132; }
+  .badge-bad  { background: #f8d7da; color: #842029; }
+  .badge-info { background: #cff4fc; color: #055160; }
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 1.2rem; border-radius: 8px; overflow-x: auto; font-size: .88rem; line-height: 1.5; }
+  .highlight { background: #fff3cd; border-left: 4px solid #ffc107; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  .success { background: #d1e7dd; border-left: 4px solid #198754; padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin: 1.5rem 0; }
+  .metric-card { background: white; border-radius: 10px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .metric-card .value { font-size: 2rem; font-weight: 700; color: #0d6efd; }
+  .metric-card .value.green { color: #198754; }
+  .metric-card .label { font-size: .85rem; color: #6c757d; margin-top: .25rem; }
+  @media(max-width:768px) { .charts-grid,.summary-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Репликация MySQL: master–slave, кворум и файловер</h1>
+
+<h2>1. Топология и конфигурация</h2>
+<table>
+  <tr><th>Параметр</th><th>Значение</th></tr>
+  <tr><td>СУБД</td><td>MySQL 8.0 (3 узла в Docker Compose)</td></tr>
+  <tr><td>Топология</td><td>1 master (:3406) + 2 slave (:3407, :3408)</td></tr>
+  <tr><td>Тип репликации</td><td>Потоковая, GTID-based, ROW binlog</td></tr>
+  <tr><td>Кворум</td><td>Полусинхронная (semi-sync), ACK от ≥1 из 2 слейвов</td></tr>
+  <tr><td>Записей в таблице users</td><td>995 000 (реальные ФИО из CSV)</td></tr>
+  <tr><td>Инструмент нагрузки</td><td>k6 v0.57.0, длительность 30 с</td></tr>
+  <tr><td>Уровни нагрузки (VU)</td><td>1 / 10 / 50 / 100</td></tr>
+  <tr><td>Профиль чтения</td><td>50% <code>/user/get/{id}</code> + 50% <code>/user/search</code></td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Роутинг в приложении.</strong> Реализован <code>ConnectionRouter</code> (аналог Spring
+  <code>ReplicationRoutingDataSource</code>): запись (<code>CreateAsync</code>) всегда идёт на мастер,
+  чтение (<code>GetByIdAsync</code>, <code>SearchAsync</code>) — round-robin по слейвам. Переключение
+  флагом <code>Replication:UseReplicas</code> в appsettings.json.
+</div>
+
+<h2>2. Результаты чтения: мастер vs слейвы</h2>
+<p>
+  <span class="badge badge-bad">baseline</span> — все чтения на мастер.
+  <span class="badge badge-good">slaves</span> — чтения распределены по двум слейвам.
+</p>
+
+<h3>GET /user/get/{id} — p95 latency, мс</h3>
+<table>
+  <tr><th>VUs</th><th>baseline (master)</th><th>slaves</th><th>throughput baseline, rps</th><th>throughput slaves, rps</th></tr>
+  <tr><td>1</td><td>5.0</td><td>10.8</td><td>63.0</td><td>25.0</td></tr>
+  <tr><td>10</td><td>21.1</td><td>42.4</td><td>222.6</td><td>169.7</td></tr>
+  <tr><td>50</td><td>85.1</td><td>166.5</td><td>209.3</td><td>183.0</td></tr>
+  <tr><td>100</td><td>185.8</td><td>763.4</td><td>218.2</td><td>127.1</td></tr>
+</table>
+
+<h3>GET /user/search — p95 latency, мс</h3>
+<table>
+  <tr><th>VUs</th><th>baseline (master)</th><th>slaves</th></tr>
+  <tr><td>1</td><td>72.7</td><td>246.9</td></tr>
+  <tr><td>10</td><td>188.4</td><td>244.7</td></tr>
+  <tr><td>50</td><td>1236.2</td><td>1343.0</td></tr>
+  <tr><td>100</td><td>2376.7</td><td>3754.7</td></tr>
+</table>
+
+<h2>3. Графики</h2>
+<div class="charts-grid">
+  <div class="chart-box">
+    <h3>Latency /user/get p95</h3>
+    <canvas id="getLat"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Latency /user/search p95</h3>
+    <canvas id="searchLat"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Throughput (rps)</h3>
+    <canvas id="tput"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>Throughput vs Latency (search)</h3>
+    <canvas id="scatter"></canvas>
+  </div>
+</div>
+
+<h2>4. Интерпретация: почему слейвы не быстрее?</h2>
+<div class="highlight">
+  На графиках видно, что распределение чтения по слейвам <strong>не дало прироста</strong> —
+  latency и throughput сопоставимы или чуть хуже baseline. Это <strong>ожидаемый и честный
+  результат для стенда на одной физической машине</strong>, и вот почему:
+</div>
+<ul>
+  <li><strong>Нет нового железа.</strong> Все три узла MySQL живут в одном Docker/WSL2 на одном CPU
+      и одном диске. Раскидывание чтения по двум слейвам не добавляет мощности — та же машина
+      конкурирует сама с собой, плюс мастер продолжает гнать binlog на оба слейва (dump-потоки),
+      а слейвы крутят IO+SQL apply. Итог — накладные расходы без выигрыша.</li>
+  <li><strong>Round-robin «разбавляет» кэш.</strong> При 1 VU запросы прыгают между двумя слейвами,
+      у каждого buffer pool видит лишь половину запросов → хуже cache-hit, отсюда рост p95 на низкой
+      нагрузке (246 мс против 73 мс).</li>
+  <li><strong>Реальный выигрыш read-replica виден только на раздельном железе:</strong> когда каждая
+      реплика — отдельный сервер, N реплик дают ≈N× read-capacity. На одном ноутбуке это
+      физически не воспроизвести.</li>
+</ul>
+<div class="success">
+  <strong>Что репликация реально даёт на этом стенде:</strong>
+  <ol style="margin:.5rem 0 0 1rem">
+    <li><strong>Разгрузку мастера от чтения</strong> — мастер освобождается под запись
+        (нагрузка на запись не конкурирует с тяжёлыми search-запросами).</li>
+    <li><strong>Отказоустойчивость (HA)</strong> — при смерти мастера слейв промоутится в мастер
+        (см. раздел 6, потерь транзакций нет).</li>
+  </ol>
+</div>
+
+<h2>5. Кворумная (semi-sync) репликация</h2>
+<p>Мастер подтверждает <code>COMMIT</code> клиенту только после ACK минимум от одного слейва:</p>
+<pre>-- на мастере
+INSTALL PLUGIN rpl_semi_sync_source SONAME 'semisync_source.so';
+SET GLOBAL rpl_semi_sync_source_enabled = 1;
+SET GLOBAL rpl_semi_sync_source_wait_for_replica_count = 1;   -- кворум = 1 из 2
+SET GLOBAL rpl_semi_sync_source_timeout = 10000;
+
+-- на каждом слейве
+INSTALL PLUGIN rpl_semi_sync_replica SONAME 'semisync_replica.so';
+SET GLOBAL rpl_semi_sync_replica_enabled = 1;
+STOP REPLICA IO_THREAD; START REPLICA IO_THREAD;</pre>
+<table>
+  <tr><th>Показатель на мастере</th><th>Значение</th></tr>
+  <tr><td>Rpl_semi_sync_source_status</td><td><span class="badge badge-good">ON</span></td></tr>
+  <tr><td>Rpl_semi_sync_source_clients</td><td>2 (оба слейва)</td></tr>
+</table>
+
+<h2>6. Файловер: убийство мастера под нагрузкой на запись</h2>
+<p>Сценарий: непрерывная запись в таблицу <code>failover_test</code> с подсчётом успешных коммитов
+на клиенте → <code>docker kill mysql-master</code> → промоут самого свежего слейва → проверка потерь.</p>
+
+<div class="summary-grid">
+  <div class="metric-card"><div class="value">2 432</div><div class="label">успешных коммитов (клиент)</div></div>
+  <div class="metric-card"><div class="value">2 432</div><div class="label">строк на новом мастере</div></div>
+  <div class="metric-card"><div class="value green">0</div><div class="label">потеряно транзакций</div></div>
+  <div class="metric-card"><div class="value">15</div><div class="label">ошибок после смерти мастера</div></div>
+</div>
+
+<div class="success">
+  <strong>Потерь нет.</strong> Клиент получил подтверждение по 2432 коммитам — ровно столько же
+  оказалось на новом мастере после промоута. Это гарантия semi-sync: каждый подтверждённый
+  клиенту commit был реплицирован минимум на один слейв <em>до</em> ответа клиенту, поэтому смерть
+  мастера его не теряет. 15 ошибок — это попытки записи уже <em>после</em> kill, клиент их
+  успешными не считал.
+</div>
+
+<h3>Шаги файловера</h3>
+<ol>
+  <li>Сравнить <code>@@GLOBAL.gtid_executed</code> обоих слейвов, выбрать с наибольшим номером
+      транзакции (оба применили <code>...:1-2681</code> — данные идентичны).</li>
+  <li>На выбранном слейве: <code>STOP REPLICA; RESET REPLICA ALL; SET GLOBAL read_only=0;</code></li>
+  <li>Второй слейв перенаправить на нового мастера: <code>CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql-slave1'...</code></li>
+  <li>Проверка: запись в новый мастер реплицируется на оставшийся слейв. ✅</li>
+</ol>
+
+<h2>7. EXPLAIN поискового запроса (на слейве)</h2>
+<pre>EXPLAIN SELECT id FROM users FORCE INDEX(idx_name_search)
+WHERE first_name LIKE 'Ив%' AND second_name LIKE 'Ив%' ORDER BY id;
+
+id  select_type  table  type   key              key_len  rows  Extra
+1   SIMPLE       users  range  idx_name_search  804      1     Using where; Using index; Using filesort</pre>
+<p>Слейвы получили ту же схему и индекс <code>idx_name_search (first_name, second_name)</code> из ДЗ2
+через репликацию DDL — поиск на них работает по индексу (<code>type=range, Using index</code>),
+как и на мастере.</p>
+
+<h2>8. Выводы</h2>
+<ul>
+  <li>Настроена потоковая GTID-репликация 1 мастер + 2 слейва, чтение разнесено на слейвы,
+      запись — на мастер (application-level routing).</li>
+  <li>На одной физической машине read-replica <strong>не ускоряет чтение</strong> (нет нового железа),
+      но разгружает мастер и даёт отказоустойчивость.</li>
+  <li>Semi-sync с кворумом 1/2 обеспечил <strong>файловер без потери транзакций</strong>:
+      2432 подтверждённых коммита пережили <code>kill -9</code> мастера.</li>
+</ul>
+
+<script>
+const VUS = [1, 10, 50, 100];
+const data = {
+  get_p95:    { baseline: [5.0, 21.1, 85.1, 185.8],  slaves: [10.8, 42.4, 166.5, 763.4] },
+  search_p95: { baseline: [72.7, 188.4, 1236.2, 2376.7], slaves: [246.9, 244.7, 1343.0, 3754.7] },
+  tput:       { baseline: [63.0, 222.6, 209.3, 218.2], slaves: [25.0, 169.7, 183.0, 127.1] },
+};
+const C_BASE = '#dc3545', C_SLAVE = '#198754';
+const mk = (id, yLabel, base, slave, logY=false) => new Chart(document.getElementById(id), {
+  type: 'line',
+  data: { labels: VUS, datasets: [
+    { label: 'baseline (master)', data: base, borderColor: C_BASE, backgroundColor: C_BASE+'22', tension:.2, fill:true },
+    { label: 'slaves',            data: slave, borderColor: C_SLAVE, backgroundColor: C_SLAVE+'22', tension:.2, fill:true },
+  ]},
+  options: { responsive:true, scales: {
+    x: { title: { display:true, text:'Virtual Users' } },
+    y: { title: { display:true, text:yLabel }, type: logY?'logarithmic':'linear' }
+  }}
+});
+mk('getLat', 'p95, ms', data.get_p95.baseline, data.get_p95.slaves);
+mk('searchLat', 'p95, ms (log)', data.search_p95.baseline, data.search_p95.slaves, true);
+mk('tput', 'requests / sec', data.tput.baseline, data.tput.slaves);
+
+new Chart(document.getElementById('scatter'), {
+  type: 'scatter',
+  data: { datasets: [
+    { label:'baseline', data: VUS.map((v,i)=>({x:data.tput.baseline[i], y:data.search_p95.baseline[i]})), backgroundColor:C_BASE, pointRadius:6 },
+    { label:'slaves',   data: VUS.map((v,i)=>({x:data.tput.slaves[i],   y:data.search_p95.slaves[i]})),   backgroundColor:C_SLAVE, pointRadius:6 },
+  ]},
+  options: { responsive:true, scales: {
+    x: { title:{display:true,text:'throughput, rps'} },
+    y: { title:{display:true,text:'search p95, ms'} }
+  }}
+});
+</script>
+
+</body>
+</html>

@@ -12,8 +12,15 @@
 ├── backend/SocialNetwork/   — ASP.NET Core API
 ├── frontend/social-network/ — Vue.js приложение
 ├── database/init.sql        — SQL-скрипт создания БД
-└── postman/                 — Postman-коллекция
+├── postman/                 — Postman-коллекция
+├── replication/             — ДЗ «Репликация»: docker-compose кластер MySQL + скрипты
+└── report/                  — отчёты (индексы, репликация)
 ```
+
+## Домашние задания
+- **ДЗ1** — скелет соцсети (этот README ниже)
+- **ДЗ2** — индексы и нагрузочное тестирование: [report/index.html](report/index.html)
+- **ДЗ «Репликация»** — master–slave, semi-sync, файловер: [replication/README.md](replication/README.md), отчёт [report/replication.html](report/replication.html)
 
 ## API эндпоинты
 

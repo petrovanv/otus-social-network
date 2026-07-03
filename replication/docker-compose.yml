@@ -1,0 +1,98 @@
+services:
+  mysql-master:
+    image: mysql:8.0
+    container_name: mysql-master
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Tenerife12!
+      MYSQL_DATABASE: social_network
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Tenerife12!
+    ports:
+      - "3406:3306"
+    volumes:
+      - master-data:/var/lib/mysql
+    # Настройки передаются флагами: bind-mount cnf на Windows игнорируется MySQL (права 777)
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --binlog-expire-logs-seconds=604800
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pTenerife12!"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql-slave1:
+    image: mysql:8.0
+    container_name: mysql-slave1
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Tenerife12!
+      MYSQL_DATABASE: social_network
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Tenerife12!
+    ports:
+      - "3407:3306"
+    volumes:
+      - slave1-data:/var/lib/mysql
+    command:
+      - --server-id=2
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --relay-log=relay-bin
+      - --read-only=ON
+      - --default-authentication-plugin=mysql_native_password
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pTenerife12!"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql-slave2:
+    image: mysql:8.0
+    container_name: mysql-slave2
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Tenerife12!
+      MYSQL_DATABASE: social_network
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: Tenerife12!
+    ports:
+      - "3408:3306"
+    volumes:
+      - slave2-data:/var/lib/mysql
+    command:
+      - --server-id=3
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --relay-log=relay-bin
+      - --read-only=ON
+      - --default-authentication-plugin=mysql_native_password
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pTenerife12!"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  master-data:
+  slave1-data:
+  slave2-data:

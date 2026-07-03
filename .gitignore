@@ -17,3 +17,10 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# k6 binaries & transient
+k6.zip
+k6/k6-v*/
+k6/token.txt
+replication/loadtest/token.txt
+replication/loadtest/ids.json

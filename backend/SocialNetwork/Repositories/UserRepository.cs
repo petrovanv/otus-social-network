@@ -1,21 +1,22 @@
 using MySqlConnector;
 using SocialNetwork.Models;
+using SocialNetwork.Services;
 
 namespace SocialNetwork.Repositories;
 
 public class UserRepository : IUserRepository
 {
-    private readonly string _connectionString;
+    private readonly IConnectionRouter _router;
 
-    public UserRepository(IConfiguration configuration)
+    public UserRepository(IConnectionRouter router)
     {
-        _connectionString = configuration.GetConnectionString("MySql")
-            ?? throw new InvalidOperationException("MySql connection string not configured");
+        _router = router;
     }
 
+    // ЗАПИСЬ — всегда на мастер
     public async Task<string> CreateAsync(User user)
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_router.GetWriteConnectionString());
         await conn.OpenAsync();
 
         const string sql = @"
@@ -37,9 +38,10 @@ public class UserRepository : IUserRepository
         return user.Id;
     }
 
+    // ЧТЕНИЕ — со слейва (round-robin)
     public async Task<User?> GetByIdAsync(string id)
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_router.GetReadConnectionString());
         await conn.OpenAsync();
 
         const string sql = "SELECT id, email, first_name, second_name, birthdate, gender, biography, city, password_hash FROM users WHERE id = @id";
@@ -53,9 +55,10 @@ public class UserRepository : IUserRepository
         return MapUser(reader);
     }
 
+    // ЧТЕНИЕ — со слейва. Логин должен видеть свежие данные, но для ДЗ читаем со слейва
     public async Task<User?> GetByEmailAsync(string email)
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_router.GetReadConnectionString());
         await conn.OpenAsync();
 
         const string sql = "SELECT id, email, first_name, second_name, birthdate, gender, biography, city, password_hash FROM users WHERE email = @email";
@@ -69,9 +72,10 @@ public class UserRepository : IUserRepository
         return MapUser(reader);
     }
 
+    // ЧТЕНИЕ — со слейва (round-robin)
     public async Task<List<User>> SearchAsync(string firstName, string lastName)
     {
-        await using var conn = new MySqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_router.GetReadConnectionString());
         await conn.OpenAsync();
 
         const string sql = @"

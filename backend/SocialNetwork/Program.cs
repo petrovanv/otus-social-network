@@ -60,6 +60,7 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader());
 });
 
+builder.Services.AddSingleton<IConnectionRouter, ConnectionRouter>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
