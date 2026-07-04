@@ -3,3 +3,6 @@ write-load.out
 write-load.err
 token.txt
 ids.json
+posts.txt
+demo_user.txt
+demo_feed_user.txt

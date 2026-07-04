@@ -21,6 +21,7 @@
 - **ДЗ1** — скелет соцсети (этот README ниже)
 - **ДЗ2** — индексы и нагрузочное тестирование: [report/index.html](report/index.html)
 - **ДЗ «Репликация»** — master–slave, semi-sync, файловер: [replication/README.md](replication/README.md), отчёт [report/replication.html](report/replication.html)
+- **ДЗ «Лента постов друзей»** — посты, друзья, лента с кэшем в Redis (fan-out on write, 1000 постов): [replication/README.md](replication/README.md#лента-постов-друзей-кэш-в-redis)
 
 ## API эндпоинты
 

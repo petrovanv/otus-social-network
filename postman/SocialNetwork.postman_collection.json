@@ -2,13 +2,16 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "SocialNetwork API",
-    "description": "Отус ДЗ1 — Заготовка социальной сети",
+    "description": "Отус Highload — соцсеть: пользователи, друзья, посты, лента с кэшем",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "https://localhost:7162", "type": "string" },
-    { "key": "token",    "value": "",                      "type": "string" },
-    { "key": "user_id",  "value": "",                      "type": "string" }
+    { "key": "base_url",  "value": "http://localhost:5282", "type": "string" },
+    { "key": "token",     "value": "", "type": "string" },
+    { "key": "user_id",   "value": "", "type": "string" },
+    { "key": "friend_id", "value": "", "type": "string" },
+    { "key": "friend_token", "value": "", "type": "string" },
+    { "key": "post_id",   "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -16,106 +19,133 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"ivan@example.com\",\n  \"first_name\": \"Иван\",\n  \"second_name\": \"Иванов\",\n  \"birthdate\": \"1990-05-15\",\n  \"gender\": \"male\",\n  \"biography\": \"Люблю программирование и путешествия\",\n  \"city\": \"Москва\",\n  \"password\": \"secret123\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/user/register",
-          "host": ["{{base_url}}"],
-          "path": ["user", "register"]
-        },
-        "description": "Создаёт нового пользователя. Возвращает user_id (UUID)."
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"ivan@example.com\",\n  \"first_name\": \"Иван\",\n  \"second_name\": \"Иванов\",\n  \"birthdate\": \"1990-05-15\",\n  \"gender\": \"male\",\n  \"biography\": \"Люблю программирование\",\n  \"city\": \"Москва\",\n  \"password\": \"secret123\"\n}" },
+        "url": { "raw": "{{base_url}}/user/register", "host": ["{{base_url}}"], "path": ["user", "register"] },
+        "description": "Создаёт пользователя, возвращает user_id."
       },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "if (pm.response.code === 200) {",
-              "    const json = pm.response.json();",
-              "    pm.collectionVariables.set('user_id', json.user_id);",
-              "    console.log('Registered user_id:', json.user_id);",
-              "}"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ]
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) { pm.collectionVariables.set('user_id', pm.response.json().user_id); }"
+      ] } }]
     },
     {
-      "name": "2. Вход по email (получить токен)",
+      "name": "2. Вход (получить токен)",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"ivan@example.com\",\n  \"password\": \"secret123\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/login",
-          "host": ["{{base_url}}"],
-          "path": ["login"]
-        },
-        "description": "Авторизация по email. Токен и user_id автоматически сохраняются."
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"ivan@example.com\",\n  \"password\": \"secret123\"\n}" },
+        "url": { "raw": "{{base_url}}/login", "host": ["{{base_url}}"], "path": ["login"] }
       },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "if (pm.response.code === 200) {",
-              "    const json = pm.response.json();",
-              "    pm.collectionVariables.set('token', json.token);",
-              "    pm.collectionVariables.set('user_id', json.user_id);",
-              "    console.log('Token saved, user_id:', json.user_id);",
-              "}"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ]
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) { const j = pm.response.json(); pm.collectionVariables.set('token', j.token); pm.collectionVariables.set('user_id', j.user_id); }"
+      ] } }]
     },
     {
-      "name": "3. Получить анкету пользователя",
+      "name": "3. Регистрация друга + логин (для ленты)",
       "request": {
-        "method": "GET",
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"petr@example.com\",\n  \"first_name\": \"Пётр\",\n  \"second_name\": \"Петров\",\n  \"birthdate\": \"1992-03-10\",\n  \"city\": \"Казань\",\n  \"password\": \"secret123\"\n}" },
+        "url": { "raw": "{{base_url}}/user/register", "host": ["{{base_url}}"], "path": ["user", "register"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) { pm.collectionVariables.set('friend_id', pm.response.json().user_id); }"
+      ] } }]
+    },
+    {
+      "name": "4. friend/set — добавить друга",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{base_url}}/friend/set/{{friend_id}}", "host": ["{{base_url}}"], "path": ["friend", "set", "{{friend_id}}"] },
+        "description": "Текущий пользователь подписывается на friend_id — его посты попадут в ленту."
+      }
+    },
+    {
+      "name": "5. friend/delete — удалить друга",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{base_url}}/friend/delete/{{friend_id}}", "host": ["{{base_url}}"], "path": ["friend", "delete", "{{friend_id}}"] }
+      }
+    },
+    {
+      "name": "6. post/create — создать пост",
+      "request": {
+        "method": "POST",
         "header": [
+          { "key": "Content-Type", "value": "application/json" },
           { "key": "Authorization", "value": "Bearer {{token}}" }
         ],
-        "url": {
-          "raw": "{{base_url}}/user/get/{{user_id}}",
-          "host": ["{{base_url}}"],
-          "path": ["user", "get", "{{user_id}}"]
-        },
-        "description": "Возвращает анкету пользователя. Требует JWT-токен."
-      }
+        "body": { "mode": "raw", "raw": "{\n  \"text\": \"Мой первый пост в ленте\"\n}" },
+        "url": { "raw": "{{base_url}}/post/create", "host": ["{{base_url}}"], "path": ["post", "create"] },
+        "description": "Создаёт пост. При создании пост раскладывается по лентам подписчиков (fan-out)."
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "if (pm.response.code === 200) { pm.collectionVariables.set('post_id', pm.response.json().id); }"
+      ] } }]
     },
     {
-      "name": "4. Вход — неверный пароль (ожидается 401)",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"ivan@example.com\",\n  \"password\": \"wrongpassword\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/login",
-          "host": ["{{base_url}}"],
-          "path": ["login"]
-        }
-      }
-    },
-    {
-      "name": "5. Анкета без токена (ожидается 401)",
+      "name": "7. post/get — получить пост",
       "request": {
         "method": "GET",
-        "header": [],
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{base_url}}/post/get/{{post_id}}", "host": ["{{base_url}}"], "path": ["post", "get", "{{post_id}}"] }
+      }
+    },
+    {
+      "name": "8. post/update — обновить пост",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"id\": \"{{post_id}}\",\n  \"text\": \"Отредактированный текст поста\"\n}" },
+        "url": { "raw": "{{base_url}}/post/update", "host": ["{{base_url}}"], "path": ["post", "update"] }
+      }
+    },
+    {
+      "name": "9. post/delete — удалить пост",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"id\": \"{{post_id}}\"\n}" },
+        "url": { "raw": "{{base_url}}/post/delete", "host": ["{{base_url}}"], "path": ["post", "delete"] }
+      }
+    },
+    {
+      "name": "10. post/feed — лента друзей (кэш)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
         "url": {
-          "raw": "{{base_url}}/user/get/{{user_id}}",
+          "raw": "{{base_url}}/post/feed?offset=0&limit=10",
           "host": ["{{base_url}}"],
-          "path": ["user", "get", "{{user_id}}"]
+          "path": ["post", "feed"],
+          "query": [
+            { "key": "offset", "value": "0" },
+            { "key": "limit", "value": "10" }
+          ]
+        },
+        "description": "Лента постов друзей из Redis-кэша (последние 1000). Первый вызов — пересборка из БД, дальше — из кэша."
+      }
+    },
+    {
+      "name": "11. Поиск анкет по префиксу",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/user/search?first_name=Ив&last_name=Ив",
+          "host": ["{{base_url}}"],
+          "path": ["user", "search"],
+          "query": [
+            { "key": "first_name", "value": "Ив" },
+            { "key": "last_name", "value": "Ив" }
+          ]
         }
       }
     }

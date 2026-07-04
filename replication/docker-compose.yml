@@ -13,9 +13,26 @@ services:
       Replication__UseReplicas: "true"
       Replication__Slaves__0: "Server=mysql-slave1;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
       Replication__Slaves__1: "Server=mysql-slave2;Port=3306;Database=social_network;Uid=admin;Pwd=Tenerife12!;AllowPublicKeyRetrieval=true;CharSet=utf8mb4;"
+      Redis__ConnectionString: "redis:6379"
     depends_on:
       mysql-master:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------- Redis (кэш ленты постов) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: sn-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # ---------- MySQL master ----------
   mysql-master:
